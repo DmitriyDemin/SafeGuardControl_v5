@@ -1,4 +1,9 @@
 package ru.yarskiy.safeguardontrol.model;
 
-public class EquipmentStatus {
+public enum EquipmentStatus {
+    РАБОТОСПОСОБНО,
+    НЕИСПРАВНО,
+    В_РЕМОНТЕ,
+    СНЯТО_С_УЧЁТА,
+    ТРЕБУЕТ_ПРОВЕРКИ
 }
