@@ -1,4 +1,4 @@
-package ru.yarskiy.safeguardontrol.model;
+package ru.yarskiy.safeguardcontrol.model;
 
 public enum EquipmentStatus {
     РАБОТОСПОСОБНО,

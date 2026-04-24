@@ -1,6 +1,7 @@
 package ru.yarskiy.safeguardcontrol.model;
 
 import jakarta.persistence.*;
+
 import java.time.LocalDate;
 
 @Entity

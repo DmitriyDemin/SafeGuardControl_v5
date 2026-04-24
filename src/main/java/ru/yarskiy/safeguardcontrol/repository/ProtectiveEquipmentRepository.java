@@ -1,4 +1,4 @@
-package ru.yarskiy.safeguardontrol.repository;
+package ru.yarskiy.safeguardcontrol.repository;
 
 public class ProtectiveEquipmentRepository {
 }
