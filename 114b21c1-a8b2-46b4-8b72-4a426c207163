@@ -2220,7 +2220,7 @@ USER at 2026-04-26T20:20:22.501392500:
 
 продолжаем подробный разбор сущностей, на предыдущем этапе мы перешли к репозиторию
 
-ASSISTANT at 2026-04-26T20:21:13.783366900:
+ASSISTANT at 2026-04-26T20:21:42.647941100:
 
 Отлично! Мы завершили разработку сущности `ProtectiveEquipment` — основы модели данных. Теперь переходим к **репозиторию**, как и планировали.
 
@@ -2335,3 +2335,167 @@ if (result.isPresent()) {
 ```java
 List<ProtectiveEquipment> findByType(String type);
 ```
+> Находит все СИЗ определённого типа (например, все перчатки).
+
+- Параметр `String type` — Spring автоматически преобразует в `EquipmentType` (по имени enum).
+- Используется в:
+  - Отчётах ("Все указатели напряжения").
+  - Фильтрации в интерфейсе.
+
+> ⚠️ Внимание: передавайте имя enum в верхнем регистре:
+```java
+repo.findByType("ДИЭЛЕКТРИЧЕСКИЕ_ПЕРЧАТКИ");
+```
+
+---
+
+### ✅ 5. `findByStatus` — поиск по статусу
+```java
+List<ProtectiveEquipment> findByStatus(EquipmentStatus status);
+```
+> Находит все СИЗ с заданным статусом.
+
+Пример:
+```java
+List<ProtectiveEquipment> faulty = repo.findByStatus(EquipmentStatus.НЕИСПРАВНО);
+```
+
+- Используется для:
+  - Формирования списка неисправных СИЗ.
+  - Контроля за ремонтом.
+  - Аудита.
+
+---
+
+### ✅ 6. `findExpiredOrDueForTesting` — ключевой метод контроля сроков
+```java
+@Query("SELECT p FROM ProtectiveEquipment p " +
+       "WHERE p.nextTestDate <= :today AND p.status <> 'СНЯТО_С_УЧЁТА'")
+List<ProtectiveEquipment> findExpiredOrDueForTesting(@Param("today") LocalDate today);
+```
+> Находит **все СИЗ, срок проверки которых истёк или подошёл**.
+
+#### Зачем это нужно?
+- Автоматическое обновление статуса на `ТРЕБУЕТ_ПРОВЕРКИ`.
+- Формирование ежедневного отчёта.
+- Блокировка использования таких СИЗ.
+
+#### Особенности:
+- `p.nextTestDate <= :today` — дата меньше или равна сегодня.
+- `p.status <> 'СНЯТО_С_УЧЁТА'` — исключаем списанные средства.
+- `@Param("today")` — явное связывание параметра в JPQL.
+
+Вызов:
+```java
+List<ProtectiveEquipment> expired = repo.findExpiredOrDueForTesting(LocalDate.now());
+```
+
+---
+
+### ✅ 7. `findDueForTestingSoon` — предупреждение заранее
+```java
+@Query("SELECT p FROM ProtectiveEquipment p " +
+       "WHERE p.nextTestDate BETWEEN :startDate AND :endDate " +
+       "AND p.status <> 'СНЯТО_С_УЧЁТА'")
+List<ProtectiveEquipment> findDueForTestingSoon(
+    @Param("startDate") LocalDate startDate,
+    @Param("endDate") LocalDate endDate
+);
+```
+> Находит СИЗ, у которых проверка **будет требоваться в ближайшие N дней**.
+
+#### Пример использования:
+- За 7 дней до окончания срока — отправить уведомление ответственному лицу.
+- Отчёт: "Требуют проверки в этом месяце".
+
+Пример вызова:
+```java
+LocalDate start = LocalDate.now();
+LocalDate end = start.plusDays(7);
+List<ProtectiveEquipment> soon = repo.findDueForTestingSoon(start, end);
+```
+
+---
+
+### ✅ 8. `countByStatus` — статистика
+```java
+long countByStatus(EquipmentStatus status);
+```
+> Быстрый подсчёт количества СИЗ по статусу.
+
+Используется в:
+- Дашборде администратора.
+- Графиках (например, круговая диаграмма: работоспособно / неисправно / требует проверки).
+
+Пример:
+```java
+long total = repo.count(); // всего
+long expired = repo.countByStatus(EquipmentStatus.ТРЕБУЕТ_ПРОВЕРКИ);
+```
+
+---
+
+## 🧩 Почему именно JPQL, а не методы по конвенции?
+
+Spring Data позволяет писать запросы **по названию метода**, например:
+
+```java
+List<ProtectiveEquipment> findByNextTestDateBefore(LocalDate date);
+```
+
+Но мы используем `@Query`, потому что:
+
+| Причина | Объяснение |
+|--------|------------|
+| ❌ Нельзя исключить статус | `findByNextTestDateBefore(...)` вернёт **все**, включая `СНЯТО_С_УЧЁТА` |
+| ✅ Полный контроль над логикой | Можно добавить `AND p.status <> 'СНЯТО_С_УЧЁТА'` |
+| ✅ Читаемость и масштабируемость | Легко модифицировать запрос |
+
+---
+
+## 🔄 Как будет использоваться репозиторий?
+
+Пример в сервисе:
+```java
+@Service
+public class EquipmentService {
+    private final ProtectiveEquipmentRepository repository;
+
+    public EquipmentService(ProtectiveEquipmentRepository repository) {
+        this.repository = repository;
+    }
+
+    @Scheduled(cron = "0 0 6 * * ?") // Каждый день в 6:00
+    public void checkOverdueEquipment() {
+        LocalDate today = LocalDate.now();
+        List<ProtectiveEquipment> overdue = repository.findExpiredOrDueForTesting(today);
+
+        for (ProtectiveEquipment eq : overdue) {
+            if (eq.getStatus() != EquipmentStatus.ТРЕБУЕТ_ПРОВЕРКИ) {
+                eq.setStatus(EquipmentStatus.ТРЕБУЕТ_ПРОВЕРКИ);
+                repository.save(eq);
+            }
+        }
+    }
+}
+```
+
+---
+
+## ✅ Вывод
+
+`ProtectiveEquipmentRepository` — это **мост между бизнес-логикой и базой данных**. Он:
+- Обеспечивает точный и безопасный доступ к данным.
+- Реализует ключевые бизнес-запросы (просроченные СИЗ, предупреждения).
+- Готов к интеграции с сервисами, контроллерами и планировщиком.
+
+---
+
+### Далее
+
+Хотите, чтобы я продолжил с созданием **сервиса `EquipmentService`**, в котором:
+- Будет логика добавления/обновления СИЗ.
+- Автоматический расчёт `nextTestDate` по типу.
+- Планировщик `@Scheduled` для контроля сроков?
+
+Или хотите сначала создать **ещё одну сущность**, например `InspectionHistory`?
