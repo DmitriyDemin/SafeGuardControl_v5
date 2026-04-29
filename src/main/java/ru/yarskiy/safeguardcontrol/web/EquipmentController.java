@@ -1,10 +1,10 @@
 package ru.yarskiy.safeguardcontrol.web;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import ru.yarskiy.safeguardcontrol.model.EquipmentStatus;
+import ru.yarskiy.safeguardcontrol.model.EquipmentType; // ✅ Добавлен импорт
 import ru.yarskiy.safeguardcontrol.model.ProtectiveEquipment;
 import ru.yarskiy.safeguardcontrol.service.EquipmentService;
 
@@ -15,7 +15,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/equipment")
-@CrossOrigin(origins = "*") // Разрешаем CORS (для фронтенда)
+@CrossOrigin(origins = "*")
 public class EquipmentController {
 
     private final EquipmentService equipmentService;
@@ -25,14 +25,12 @@ public class EquipmentController {
         this.equipmentService = equipmentService;
     }
 
-    // 🔹 1. Получить все СИЗ
     @GetMapping
     public ResponseEntity<List<ProtectiveEquipment>> getAllEquipment() {
         List<ProtectiveEquipment> equipmentList = equipmentService.findAll();
         return ResponseEntity.ok(equipmentList);
     }
 
-    // 🔹 2. Получить СИЗ по ID
     @GetMapping("/{id}")
     public ResponseEntity<ProtectiveEquipment> getEquipmentById(@PathVariable Long id) {
         return equipmentService.findById(id)
@@ -40,7 +38,6 @@ public class EquipmentController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // 🔹 3. Добавить новое СИЗ
     @PostMapping
     public ResponseEntity<ProtectiveEquipment> addNewEquipment(@RequestBody Map<String, Object> payload) {
         try {
@@ -57,7 +54,7 @@ public class EquipmentController {
                 return ResponseEntity.badRequest().build();
             }
 
-            EquipmentType type = EquipmentType.valueOf(typeStr);
+            EquipmentType type = EquipmentType.valueOf(typeStr); // ✅ Теперь компилятор знает, что такое EquipmentType
 
             ProtectiveEquipment equipment = equipmentService.addNewEquipment(
                     inventoryNumber, name, type, manufacturer, specification,
@@ -72,7 +69,6 @@ public class EquipmentController {
         }
     }
 
-    // 🔹 4. Обновить СИЗ
     @PutMapping("/{id}")
     public ResponseEntity<ProtectiveEquipment> updateEquipment(
             @PathVariable Long id,
@@ -104,7 +100,6 @@ public class EquipmentController {
         }
     }
 
-    // 🔹 5. Получить просроченные СИЗ
     @GetMapping("/overdue")
     public ResponseEntity<List<ProtectiveEquipment>> getOverdueEquipment() {
         List<ProtectiveEquipment> overdue = equipmentService.findAll().stream()
@@ -115,7 +110,6 @@ public class EquipmentController {
         return ResponseEntity.ok(overdue);
     }
 
-    // 🔹 6. Получить статистику по статусам
     @GetMapping("/stats")
     public ResponseEntity<Map<String, Long>> getEquipmentStats() {
         Map<String, Long> stats = new HashMap<>();
@@ -126,7 +120,6 @@ public class EquipmentController {
         return ResponseEntity.ok(stats);
     }
 
-    // 🔹 Вспомогательный метод: парсинг даты из JSON
     private LocalDate parseLocalDate(Object dateObj) {
         if (dateObj == null) return null;
         if (dateObj instanceof String str) {
